@@ -35,5 +35,11 @@
     <ClInclude Include="SAAPI Lab5.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SAAPI Lab6.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SAAPI Lab7.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

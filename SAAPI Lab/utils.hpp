@@ -71,7 +71,7 @@ cv::Mat convertToGrey(const cv::Mat &coloredMat)
 cv::Mat toGreyOpenCV(const cv::Mat &coloredMat)
 {
 	cv::Mat result;
-	cvtColor(coloredMat, result, cv::COLOR_RGB2GRAY);
+	cv::cvtColor(coloredMat, result, cv::COLOR_RGB2GRAY);
 	return result;
 }
 
@@ -102,14 +102,14 @@ cv::Mat computeHistogramImage(const cv::Mat &hist)
 	cv::Mat result(hist_h, hist_w, CV_8UC1, cv::Scalar(0, 0, 0));
 	cv::Mat normalizedHist;
 	/// Normalize the result to [ 0, histImage.rows ]
-	normalize(hist, normalizedHist, 0, result.rows, cv::NORM_MINMAX, -1, cv::Mat());
-
+	normalize(hist, normalizedHist, 0, result.rows, cv::NORM_MINMAX);
+	
 	/// Draw for each channel
 	for (int i = 0; i < 256; i++)
 	{
 		cv::line(result,
 			cv::Point(bin_w * i, hist_h),
-			cv::Point(bin_w * (i), hist_h - cvRound(normalizedHist.at<float>(i))),
+			cv::Point(bin_w * i, hist_h - cvRound(normalizedHist.at<float>(i))),
 			cv::Scalar(255, 255, 255), 2, 8, 0);
 	}
 
@@ -281,7 +281,7 @@ cv::Mat DFTLogNorm(const cv::Mat &input)
 }
 
 std::pair<cv::Mat, cv::Mat> DFTOpenCV(const cv::Mat &input)
-{
+{	
 	cv::Mat asd;
 	input.convertTo(asd, CV_32F);
 	cv::Mat planes[] = { cv::Mat_<float>(asd), cv::Mat::zeros(asd.size(), CV_32F) };
@@ -299,6 +299,7 @@ cv::Mat DFTOpenCVLogNorm(const cv::Mat &input)
 {
 	auto fourier = DFTOpenCV(input);
 
+	
 	magnitude(fourier.first, fourier.second, fourier.first);
 
 
@@ -443,6 +444,85 @@ cv::Mat getRegionAround(cv::Mat input, std::pair<int, int> centerPixel, int regi
 	return cv::Mat(input, cv::Rect(centerPixel.first - regionSize, centerPixel.second - regionSize, regionSize * 2 + 1, regionSize * 2 + 1));
 }
 
+int getMean(const cv::Mat &input)
+{
+	int result = 0;
+	int cnt = 0;
+
+	for (int i = 0; i < input.rows; ++i)
+	{
+		for (int j = 0; j < input.cols; ++j)
+		{
+			result += input.at<uchar>(i, j);
+			cnt++;
+		}
+	}
+
+	return result / cnt;
+}
+
+int getGeomMean(const cv::Mat &input)
+{
+	uint64_t result = 1;
+	int cnt = 0;
+	for (int i = 0; i < input.rows; ++i)
+	{
+		for (int j = 0; j < input.cols; ++j)
+		{
+			result *= input.at<uchar>(i, j);
+			cnt++;
+		}
+	}
+
+	return std::pow(result, 1.f / float(cnt));
+}
+
+int getContraHarm(const cv::Mat &input, const float Q)
+{
+	float result1 = 0;
+	float result2 = 0;
+
+	for (int i = 0; i < input.rows; ++i)
+	{
+		for (int j = 0; j < input.cols; ++j)
+		{
+			result1 += std::pow((float) input.at<uchar>(i, j), Q + 1.f);
+			result2 += std::pow((float) input.at<uchar>(i, j), Q);
+		}
+	}
+	
+	return result1 / result2;
+}
+
+int getContraHarmPos(const cv::Mat &input)
+{
+	return getContraHarm(input, 1.5f);
+}
+
+int getContraHarmNeg(const cv::Mat &input)
+{
+	return getContraHarm(input, -1.5f);
+}
+
+cv::Mat applyGenericAverageFilter(const cv::Mat &input, int(filterFunction)(const cv::Mat &))
+{
+	cv::Mat result = input.clone();
+
+	for (int i = 2; i < input.cols - 2; ++i)
+	{
+		for (int j = 2; j < input.rows - 2; ++j)
+		{
+			auto subMat = getRegionAround(input, std::make_pair(i, j), 1);
+			subMat.convertTo(subMat, CV_8UC1);
+			result.at<uchar>(j, i) = filterFunction(subMat);
+		}
+	}
+
+	return result;
+}
+
+
+
 cv::Mat applyKuwahara(const cv::Mat &input)
 {
 
@@ -499,6 +579,31 @@ cv::Mat applyPassFilter(const cv::Mat &input, const int filterCutoff, bool which
 	return IFTOpenCV(fourier);
 }
 
+// false = band reject, true = band pass
+cv::Mat applyBandFilter(const cv::Mat &input, const float W, const float D0, bool which)
+{
+	auto fourier = DFTOpenCV(input);
+
+	for (int i = 0; i < fourier.first.rows; ++i)
+	{
+		for (int j = 0; j < fourier.first.cols; ++j)
+		{
+			auto dUV = sqrtf(i * i + j * j);
+
+			auto realValue = fourier.first.at<float>(i, j);
+			auto imaginaryValue = fourier.second.at<float>(i, j);
+			auto hUV = (dUV < D0 - W / 2.f || dUV > D0 + W / 2.f) ? 1 : 0;
+
+			hUV = which ? 1 - hUV : hUV;
+
+			fourier.first.at<float>(i, j) = realValue * hUV;
+			fourier.second.at<float>(i, j) = imaginaryValue * hUV;
+		}
+	}
+
+	return IFTOpenCV(fourier);
+}
+
 cv::Mat putTextBottom(const cv::Mat &input, const std::string text, const cv::Scalar color)
 {
 	cv::Mat result = input.clone();
@@ -506,4 +611,18 @@ cv::Mat putTextBottom(const cv::Mat &input, const std::string text, const cv::Sc
 	cv::putText(result, text, cv::Point(30, input.cols - 30), cv::FONT_HERSHEY_PLAIN, 1.4, color, 2);
 
 	return result;
+}
+
+std::pair<double, double> H(float u, float v, float a, float b, float T)
+{
+
+	const float piFact = PI * (u * a + v * b);
+	const float factor = ((T / (piFact)) * sinf(piFact));
+		
+	return std::make_pair(factor * cosf(piFact), factor * (-sinf(piFact)));
+}
+
+std::pair<double, double>  H(float u, float v)
+{
+	return H(u, v, 0.1, 0.1, 1);
 }

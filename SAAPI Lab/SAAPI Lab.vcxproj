@@ -133,6 +133,8 @@
     <ClInclude Include="SAAPI Lab3.hpp" />
     <ClInclude Include="SAAPI Lab4.hpp" />
     <ClInclude Include="SAAPI Lab5.hpp" />
+    <ClInclude Include="SAAPI Lab6.hpp" />
+    <ClInclude Include="SAAPI Lab7.hpp" />
     <ClInclude Include="utils.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
